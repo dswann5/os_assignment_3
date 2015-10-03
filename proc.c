@@ -6,13 +6,14 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "channel.h"
 
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct proc *sleeptable[NPROC]; 
-  int num_sleeping;
 } ptable;
+
+struct channel * chan_head;
 
 static struct proc *initproc;
 
@@ -26,7 +27,6 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-  ptable.num_sleeping = 0; 
 }
 
 //PAGEBREAK: 32
@@ -375,8 +375,39 @@ sleep(void *chan, struct spinlock *lk)
   proc->chan = chan;
   proc->state = SLEEPING;
 
-  ptable.sleeptable[ptable.num_sleeping] = proc; 
-  ptable.num_sleeping++;
+  // Check for channel. Add if not exists. 
+  // Add proc to appropriate channel.
+  if (chan_head == 0) {
+    chan_head->chan = chan;
+    chan_head->sleeptable[chan_head->num_sleeping++] = proc;
+    chan_head->next = 0;
+  } else {
+    int exists = 0;
+    struct channel * curr = chan_head;
+    while (curr->next != 0) {
+      if (curr->chan == chan) {
+        // Add proc to this chan
+        curr->sleeptable[curr->num_sleeping++] = proc;
+        exists = 1;
+        break;
+      }
+      curr = curr->next;
+    }
+
+    // Channel does not exist
+    if (!exists) {
+      // Add channel
+      struct channel * new_chan;
+      if ((new_chan = (struct channel *) kalloc()) == 0) {
+        panic("failed kalloc to channel");
+      }
+      new_chan->chan = chan;
+      new_chan->num_sleeping = 0;
+      new_chan->sleeptable[new_chan->num_sleeping++] = proc;
+      new_chan->next = chan_head;
+      chan_head = new_chan;
+    }
+  }
 
   sched();
 
@@ -396,11 +427,6 @@ sleep(void *chan, struct spinlock *lk)
 static void
 wakeup1(void *chan)
 {
-  struct proc *p;
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
 }
 
 // Wake up all processes sleeping on chan.
