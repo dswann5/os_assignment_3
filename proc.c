@@ -10,6 +10,8 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc *sleeptable[NPROC]; 
+  int num_sleeping;
 } ptable;
 
 static struct proc *initproc;
@@ -24,6 +26,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  ptable.num_sleeping = 0; 
 }
 
 //PAGEBREAK: 32
@@ -371,6 +374,10 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
+
+  ptable.sleeptable[ptable.num_sleeping] = proc; 
+  ptable.num_sleeping++;
+
   sched();
 
   // Tidy up.
