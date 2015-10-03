@@ -2,6 +2,8 @@ Daniel Swann and Jerald Liu
 dswann5@jhu.edu and liu.jerald@gmail.com
 Assignment 3
 
+
+
 Part 1: Study, Design, Log
 
 The process that wants to give up its CPU must acquire the ptable.lock, release any other locks it has, update its proc state and call sched(). Sched() checks for the previously mentioned conditions. Since the ptable lock is held, the CPU should be running w/interrups disabled. Sched() calls swtch() to save the current context in proc->context. Then we switch to the scheduler context given by cpu->scheduler. Swtch() returns on scheduler's stack as though scheduler's swtch had returned. The scheduler is infinitely looping to find a process to run and to switch to it. It finds a process that is RUNNABLE, sets proc, switches to the process' page table with switchuvm, marks the process as RUNNING, and finally calls swtch() to start running the new process.
