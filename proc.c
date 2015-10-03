@@ -376,7 +376,7 @@ sleep(void *chan, struct spinlock *lk)
   proc->state = SLEEPING;
 
   struct channel * new_chan;
-  // Check for channel. Add if not exists. 
+  // Check for existing channel. Add if not exists. 
   // Add proc to appropriate channel.
   if (head_chan == 0) {
     if ((new_chan = (struct channel *) kalloc()) == 0) {
@@ -403,7 +403,7 @@ sleep(void *chan, struct spinlock *lk)
 
     // Channel does not exist
     if (!exists) {
-      // Add channel
+      // Add channel to front of linkedlist
       if ((new_chan = (struct channel *) kalloc()) == 0) {
           panic("failed kalloc to channel");
       }
@@ -433,11 +433,10 @@ sleep(void *chan, struct spinlock *lk)
 static void
 wakeup1(void *chan)
 {
-  //struct proc *p;
-
   struct channel *cur_chan = head_chan;
   struct channel *prev_chan = 0;
 
+  // Find all procs in this channel by iterating through linkedlist
   while (cur_chan != 0) 
   {
     if (cur_chan->chan == chan) 
@@ -448,7 +447,7 @@ wakeup1(void *chan)
         for (i=0;i<cur_chan->num_sleeping;i++) {
             cur_chan->sleeptable[i]->state = RUNNABLE;
         }
-        // Remove channel from memory
+        // Remove channel from memory, with case for removing head
         if (cur_chan == head_chan) {
             head_chan = cur_chan->next_chan;
         }
@@ -461,13 +460,6 @@ wakeup1(void *chan)
     prev_chan = cur_chan;
     cur_chan=cur_chan->next_chan;
   } 
-
-  /*
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
-  */
-
 }
 
 // Wake up all processes sleeping on chan.
