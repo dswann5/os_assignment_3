@@ -376,38 +376,41 @@ sleep(void *chan, struct spinlock *lk)
   proc->state = SLEEPING;
 
   struct channel * new_chan;
-  if ((new_chan = (struct channel *) kalloc()) == 0) {
-    panic("failed kalloc to channel");
-  }
-
   // Check for channel. Add if not exists. 
   // Add proc to appropriate channel.
   if (head_chan == 0) {
+    if ((new_chan = (struct channel *) kalloc()) == 0) {
+        panic("failed kalloc to channel");
+    }
+
     new_chan->chan = chan;
     new_chan->num_sleeping = 0;
     new_chan->sleeptable[new_chan->num_sleeping++] = proc;
-    new_chan->next = 0;
+    new_chan->next_chan = 0;
     head_chan = new_chan;
   } else {
     int exists = 0;
     struct channel * curr = head_chan;
-    while (curr->next != 0) {
+    while (curr->next_chan != 0) {
       if (curr->chan == chan) {
         // Add proc to this chan
         curr->sleeptable[curr->num_sleeping++] = proc;
         exists = 1;
         break;
       }
-      curr = curr->next;
+      curr = curr->next_chan;
     }
 
     // Channel does not exist
     if (!exists) {
       // Add channel
+      if ((new_chan = (struct channel *) kalloc()) == 0) {
+          panic("failed kalloc to channel");
+      }
       new_chan->chan = chan;
       new_chan->num_sleeping = 0;
       new_chan->sleeptable[new_chan->num_sleeping++] = proc;
-      new_chan->next = head_chan;
+      new_chan->next_chan = head_chan;
       head_chan = new_chan;
     }
   }
@@ -430,11 +433,41 @@ sleep(void *chan, struct spinlock *lk)
 static void
 wakeup1(void *chan)
 {
-  struct proc *p;
+  //struct proc *p;
 
+  struct channel *cur_chan = head_chan;
+  struct channel *prev_chan = 0;
+
+  while (cur_chan != 0) 
+  {
+    if (cur_chan->chan == chan) 
+    {
+        int i;
+        // Wake up the processes on this channel
+        // We know they're already SLEEPING
+        for (i=0;i<cur_chan->num_sleeping;i++) {
+            cur_chan->sleeptable[i]->state = RUNNABLE;
+        }
+        // Remove channel from memory
+        if (cur_chan == head_chan) {
+            head_chan = cur_chan->next_chan;
+        }
+        else {
+            prev_chan->next_chan = cur_chan->next_chan;
+        }
+        kfree((char *)cur_chan);
+        break;
+    }
+    prev_chan = cur_chan;
+    cur_chan=cur_chan->next_chan;
+  } 
+
+  /*
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
+  */
+
 }
 
 // Wake up all processes sleeping on chan.
