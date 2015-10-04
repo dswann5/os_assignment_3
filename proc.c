@@ -441,21 +441,21 @@ wakeup1(void *chan)
   {
     if (cur_chan->chan == chan) 
     {
-        int i;
-        // Wake up the processes on this channel
-        // We know they're already SLEEPING
-        for (i=0;i<cur_chan->num_sleeping;i++) {
-            cur_chan->sleeptable[i]->state = RUNNABLE;
-        }
-        // Remove channel from memory, with case for removing head
-        if (cur_chan == head_chan) {
-            head_chan = cur_chan->next_chan;
-        }
-        else {
-            prev_chan->next_chan = cur_chan->next_chan;
-        }
-        kfree((char *)cur_chan);
-        break;
+      int i;
+      // Wake up the processes on this channel
+      // We know they're already SLEEPING
+      for (i=0;i<cur_chan->num_sleeping;i++) {
+          cur_chan->sleeptable[i]->state = RUNNABLE;
+      }
+      // Remove channel from memory, with case for removing head
+      if (cur_chan == head_chan) {
+        head_chan = cur_chan->next_chan;
+      }
+      else {
+        prev_chan->next_chan = cur_chan->next_chan;
+      }
+      kfree((char *)cur_chan);
+      break;
     }
     prev_chan = cur_chan;
     cur_chan=cur_chan->next_chan;
@@ -480,6 +480,39 @@ kill(int pid)
   struct proc *p;
 
   acquire(&ptable.lock);
+/*
+  struct channel *cur_chan = head_chan;
+  struct channel *prev_chan = 0;
+
+  // Find all procs in this channel by iterating through linkedlist
+  while (cur_chan != 0) 
+  {
+    if (cur_chan->chan == chan) 
+    {
+      int i;
+      // Wake up the processes on this channel
+      // We know they're already SLEEPING
+      for (i=0;i<cur_chan->num_sleeping;i++) {
+          if (cur_chan->sleeptable[i]->pid == pid) {
+            cur_chan->sleeptable[i]->killed = 1;
+            cur_chan->sleeptable[i]->state = RUNNABLE;
+          }
+      }
+      // Remove channel from memory, with case for removing head
+      if (cur_chan == head_chan) {
+        head_chan = cur_chan->next_chan;
+      }
+      else {
+        prev_chan->next_chan = cur_chan->next_chan;
+      }
+      kfree((char *)cur_chan);
+      break;
+    }
+    prev_chan = cur_chan;
+    cur_chan=cur_chan->next_chan;
+  } 
+ */
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
