@@ -33,6 +33,12 @@ Part 3:
   In order to keep track of priority, our main data structure involves modifying the ptable. We modify it so that it is 2-dimensional, 5 by 64 matrix. The 5 represents the five priorities. 64 is the max number of processes that can be run, potentially all in the same priority. We also add the priority to the the proc struct in order to enable efficient lookup of where the process is in our new 2d process table. We were thinking of adding the exact location in the 2d matrix of where the proc is located to be more efficient; however, we decided against this since it doesn't make sense that a process should know that. It should know what priority it is though. Whenever we want to call nice() to change the priority of the current process, we use the priority of the proc in order to find the row of the process matrix to search through. When we find the process, we evict it, shift array elements in order to prevent any "gaps", and then add that process to the row corresponding to its new priority. We update the priority member of proc as well.
   Our nice() invokes a call to change_priority() within proc.c. Increment takes an integer, and adds it to our current priority. We implement our change_priority() in a way that if the increment value causes the priority to exceed 2 or fall below -2, we let the priority equal 2 and -2 respectively.
   
+Difficulties:
+- NPRIORITIES/2. Solution: Set macros for lower bound, upper bound and default priority.
+- Tried to put our priority changes between acquire and release within fork, but for some reason caused unexpected behavior.
+- Instead of modifying ptable, we just maintain the aforementioned 5 by 64 matrix, but instead contains pointers to the processes. This made things a lot faster.
+
+
 
 Part 3 Additions:
 "nice" syscall references added to:
