@@ -536,6 +536,20 @@ kill(int pid)
     cur_chan=cur_chan->next_chan;
   }
 
+  // Find process in priority_table
+  int i;
+  int prior = p->priority;
+  int found = 0;
+  for (i=0;i<priority_counter[prior];i++) {
+    if (found) {
+      priority_table[prior][i-1] = priority_table[prior][i];
+    } else if (priority_table[prior][i] == p) {
+      found = 1;
+    }
+  }
+  if (found)
+    priority_counter[prior]--;
+
   release(&ptable.lock);
   return ret;
 }
@@ -603,13 +617,11 @@ int change_priority(int increment)
     int i;
     int found = 0;
     struct proc * curr_proc;
-    for (i=0;i<NPROC;i++) {
+    for (i=0;i<priority_counter[proc->priority];i++) {
         p = priority_table[proc->priority][i];
         if (found) {
             // Shift subsequent processes one index lower in the priority
             priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
-            if (i == NPROC-1) 
-                priority_table[proc->priority][i]->state = UNUSED;
         } else if (p == proc) {
             found = 1;
             curr_proc = p;
