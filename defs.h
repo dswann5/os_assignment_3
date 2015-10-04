@@ -177,6 +177,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // Increment
 int             nice(int increment);
+int            change_priority(int increment);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

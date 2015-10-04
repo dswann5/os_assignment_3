@@ -106,6 +106,7 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  p->priority = 0;
   p->state = RUNNABLE;
 }
 
@@ -576,7 +577,27 @@ procdump(void)
   }
 }
 
-void change_priority(int increment)
+// Changes the priority of the current process by increment amount
+// Checks to make sure increment is within bounds, otherwise defaults to max or min
+int change_priority(int increment)
 {
-    // Increment this proc by moving it to the proper priorty slot in the ptable
+    struct proc *p;
+    
+    // Calculate actual increment value
+    int priority = proc->priority;
+    int diff = priority-increment;
+    if (diff < LOWEST_PRIORITY) {
+       priority = LOWEST_PRIORITY;
+    }
+    if (diff > HIGHEST_PRIORITY) {
+       priority = HIGHEST_PRIORITY;
+    }
+
+    // Increment this proc by moving it to the proper priority slot in the ptable
+    for(p = ptable.proc[priority]; p < &ptable.proc[priority][NPROC]; p++){
+        if (p == proc) {
+            return 1;//if (increment)
+        }
+    }
+    return -1;
 }
