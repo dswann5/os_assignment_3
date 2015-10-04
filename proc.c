@@ -478,53 +478,48 @@ int
 kill(int pid)
 {
   struct proc *p;
-
+  int ret = -1;
   acquire(&ptable.lock);
-/*
   struct channel *cur_chan = head_chan;
-  struct channel *prev_chan = 0;
 
-  // Find all procs in this channel by iterating through linkedlist
-  while (cur_chan != 0) 
-  {
-    if (cur_chan->chan == chan) 
-    {
-      int i;
-      // Wake up the processes on this channel
-      // We know they're already SLEEPING
-      for (i=0;i<cur_chan->num_sleeping;i++) {
-          if (cur_chan->sleeptable[i]->pid == pid) {
-            cur_chan->sleeptable[i]->killed = 1;
-            cur_chan->sleeptable[i]->state = RUNNABLE;
-          }
-      }
-      // Remove channel from memory, with case for removing head
-      if (cur_chan == head_chan) {
-        head_chan = cur_chan->next_chan;
-      }
-      else {
-        prev_chan->next_chan = cur_chan->next_chan;
-      }
-      kfree((char *)cur_chan);
-      break;
-    }
-    prev_chan = cur_chan;
-    cur_chan=cur_chan->next_chan;
-  } 
- */
-
+  // First find channel
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
-      release(&ptable.lock);
-      return 0;
+      ret = 0;
+      break;
     }
   }
+  if (ret == -1)
+    return -1;
+
+  // Find process in channel data structure, delete it
+  while (cur_chan != 0) 
+  {
+    if (cur_chan->chan == p->chan) 
+    {
+      int i;
+      int found = 0;
+      for (i=0;i<cur_chan->num_sleeping;i++) {
+        // Shift element to right of process one index to the left
+        if (found) {
+          cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
+        } else if (cur_chan->sleeptable[i]->pid == pid) {
+          // We found our process
+          found = 1;
+        }
+      }
+      if (found)
+        cur_chan->num_sleeping--;
+    }
+    cur_chan=cur_chan->next_chan;
+  }
+
   release(&ptable.lock);
-  return -1;
+  return ret;
 }
 
 //PAGEBREAK: 36
