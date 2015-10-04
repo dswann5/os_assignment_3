@@ -47,8 +47,8 @@ allocproc(void)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-        if(p->state == UNUSED)
-            goto found;
+    if(p->state == UNUSED)
+      goto found;
   }
   release(&ptable.lock);
   return 0;
@@ -80,11 +80,10 @@ found:
   p->context->eip = (uint)forkret;
 
   // Set priority to 0 in new process and update priority arrays
-  p->priority = 0;
+  p->priority = NPRIORITIES/2;
   int temp_count = priority_counter[p->priority];
   prior_table[NPRIORITIES/2][temp_count] = p;
   priority_counter[p->priority]++;
- 
   return p;
 }
 
@@ -115,9 +114,13 @@ userinit(void)
   p->cwd = namei("/");
 
   // Update priority table for initproc
+/*
   p->priority = 0;
   prior_table[NPRIORITIES/2][0] = p;
-  priority_counter[NPRIORITIES/2] = 1;
+  priority_counter[NPRIORITIES/2] = 1;*/
+  p->priority = NPRIORITIES/2;
+  prior_table[NPRIORITIES/2][priority_counter[NPRIORITIES/2]] = p;
+  priority_counter[NPRIORITIES/2]++;
   p->state = RUNNABLE;
 }
 
@@ -258,6 +261,7 @@ wait(void)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
+        p->priority = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -599,9 +603,9 @@ int change_priority(int increment)
         return 0;
     }
     // Increment this proc by moving it to the proper priority slot in the ptable
-    //for(p = ptable.proc[priority]; p < &ptable.proc[priority][NPROC]; p++){
     int i;
     int found = 0;
+    struct proc * curr_proc;
     for (i=0;i<NPROC;i++) {
         p = prior_table[proc->priority][i];
         if (found) {
@@ -609,24 +613,21 @@ int change_priority(int increment)
             prior_table[proc->priority][i-1] = prior_table[proc->priority][i];
             if (i == NPROC-1) 
                 prior_table[proc->priority][i]->state = UNUSED;
-        } else if (p->pid == proc->pid) {
+        } else if (p == proc) {
             found = 1;
+            curr_proc = p;
         }
     }
     if (!found) {
         release(&ptable.lock);
         return -2;
     }
+    priority_counter[proc->priority]--;
     // Place p in new priority row
-    for (i=0;i<NPROC;i++) {
-        if (prior_table[new_priority][i]->state == UNUSED) {
-            prior_table[new_priority][i] = p;
-            prior_table[new_priority][i]->priority = new_priority;
-            release(&ptable.lock);
-            return 0;
-        }
-    }
-
+    int temp_count = priority_counter[new_priority];
+    prior_table[new_priority][temp_count] = curr_proc;
+    prior_table[new_priority][temp_count]->priority = new_priority;
+    priority_counter[new_priority]++;
     release(&ptable.lock);
-    return -1;
+    return 0;
 }
