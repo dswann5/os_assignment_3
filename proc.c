@@ -584,19 +584,43 @@ int change_priority(int increment)
     struct proc *p;
     
     // Calculate actual increment value
-    int priority = proc->priority;
-    int diff = priority-increment;
-    if (diff < LOWEST_PRIORITY) {
-       priority = LOWEST_PRIORITY;
+    int new_priority = proc->priority;
+    int sum = new_priority+increment;
+    if (sum < LOWEST_PRIORITY) {
+       new_priority = LOWEST_PRIORITY;
     }
-    if (diff > HIGHEST_PRIORITY) {
-       priority = HIGHEST_PRIORITY;
+    if (sum > HIGHEST_PRIORITY) {
+       new_priority = HIGHEST_PRIORITY;
     }
-
+    if (new_priority == proc->priority) {
+       return 0;
+    }
     // Increment this proc by moving it to the proper priority slot in the ptable
-    for(p = ptable.proc[priority]; p < &ptable.proc[priority][NPROC]; p++){
-        if (p == proc) {
-            return 1;//if (increment)
+    //for(p = ptable.proc[priority]; p < &ptable.proc[priority][NPROC]; p++){
+    int i;
+    int found = 0;
+    acquire(&ptable.lock);
+    for (i=0;i<NPROC;i++) {
+        p = &ptable.proc[proc->priority][i];
+        if (found) {
+            // Shift subsequent processes one index lower in the priority
+            ptable.proc[proc->priority][i-1] = ptable.proc[proc->priority][i];
+            if (i == NPROC-1) 
+                ptable.proc[proc->priority][i].state = UNUSED;
+        } else if (p == proc) {
+            found = 1;
+        }
+    }
+    if (!found) {
+        return -1;
+    }
+    // Place p in new priority row
+    for (i=0;i<NPROC;i++) {
+        if (ptable.proc[new_priority][i].state == UNUSED) {
+            ptable.proc[new_priority][i] = *p;
+            ptable.proc[new_priority][i].priority = new_priority;
+            release(&ptable.lock);
+            return 0;
         }
     }
     return -1;
