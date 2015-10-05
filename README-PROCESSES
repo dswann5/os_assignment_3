@@ -19,7 +19,13 @@ Maintain a cache of pointers of indeces of processes that have called sleep in o
 2) Minimize number of machine instructions for which the process table lock must be held in wakeup()
 
 Part 3 Additions:
-
+"nice" syscall references added to:
+defs.h
+user.h
+usys.S
+syscall.h
+syscall.c
+sysproc.c
 
 
 Part 2:
