@@ -1,5 +1,7 @@
 #define NPROC        64  // maximum number of processes
 #define NPRIORITIES   5  // number of total possible priorities
+#define LOWEST_PRIORITY     (NPRIORITIES/2)*-1 // Lowest priority, defaults to -2
+#define HIGHEST_PRIORITY    (NPRIORITIES/2) // Highest priority, defaults to 2
 #define KSTACKSIZE 4096  // size of per-process kernel stack
 #define NCPU          8  // maximum number of CPUs
 #define NOFILE       16  // open files per process
