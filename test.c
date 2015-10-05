@@ -8,9 +8,10 @@ int main(int argc, char * argv[])
   int pid;
   int parent = getpid();
 
-  printf(1, "Nice returned %d\n", nice(1));
+  printf(1, "Nice %d returned %d\n", 1, nice(1));
   pid = fork();
-  printf(1, "Nice returned %d\n", nice(3));
+  printf(1, "Nice %d returned %d\n", 3, nice(3));
+  printf(1, "Nice %d returned %d\n", -1, nice(-1));
   if (pid == 0) {
     // Child Process
     // Kill parent

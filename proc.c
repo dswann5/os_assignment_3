@@ -79,11 +79,6 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  // Set priority to 0 in new process and update priority arrays
-  p->priority = DEFAULT_PRIORITY;
-  int temp_count = priority_counter[p->priority];
-  priority_table[DEFAULT_PRIORITY][temp_count] = p;
-  priority_counter[p->priority]++;
   return p;
 }
 
@@ -178,8 +173,15 @@ fork(void)
  
   pid = np->pid;
 
+  // Set priority to 0 in new process and update priority arrays
+  np->priority = DEFAULT_PRIORITY;
+  int temp_count = priority_counter[DEFAULT_PRIORITY];
+  priority_table[DEFAULT_PRIORITY][temp_count] = np;
+  priority_counter[DEFAULT_PRIORITY]++; 
+
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
+  
   np->state = RUNNABLE;
   release(&ptable.lock);
   
@@ -584,7 +586,6 @@ int change_priority(int increment)
     struct proc *p;
   
     acquire(&ptable.lock);
- 
     // Calculate actual increment value
     int new_priority = proc->priority;
     new_priority = new_priority + increment;
@@ -603,6 +604,7 @@ int change_priority(int increment)
     int i;
     int found = 0;
     struct proc * curr_proc;
+
     for (i=0;i<NPROC;i++) {
         p = priority_table[proc->priority][i];
         if (found) {
@@ -617,7 +619,7 @@ int change_priority(int increment)
     }
     if (!found) {
         release(&ptable.lock);
-        return -2;
+        return -1;
     }
     priority_counter[proc->priority]--;
     // Place p in new priority row
