@@ -10,6 +10,7 @@ int main(int argc, char * argv[])
 
   printf(1, "Nice returned %d\n", nice(1));
   pid = fork();
+  printf(1, "Nice returned %d\n", nice(3));
   if (pid == 0) {
     // Child Process
     // Kill parent
