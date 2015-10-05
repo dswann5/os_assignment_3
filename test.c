@@ -4,6 +4,8 @@
 
 int main(int argc, char * argv[]) 
 {
-   printf(1, "%d\n", nice(1));
-   exit(); 
+  // Test sleeptable
+  
+  printf(1, "%d\n", nice(1));
+  exit(); 
 }

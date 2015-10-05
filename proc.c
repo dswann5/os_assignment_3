@@ -491,9 +491,9 @@ kill(int pid)
 {
   struct proc *p;
   int ret = -1;
-  acquire(&ptable.lock);
   struct channel *cur_chan = head_chan;
 
+  acquire(&ptable.lock);
   // First find channel
   int i;
   for (i = 0; i < NPRIORITIES; i++) {
