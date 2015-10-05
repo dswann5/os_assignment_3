@@ -603,11 +603,11 @@ int change_priority(int increment)
     // Calculate actual increment value
     int new_priority = proc->priority;
     new_priority = new_priority + increment;
-    if (new_priority < LOWEST_PRIORITY) {
-       new_priority = LOWEST_PRIORITY;
-    }
-    if (new_priority > HIGHEST_PRIORITY) {
+    if (new_priority < HIGHEST_PRIORITY) {
        new_priority = HIGHEST_PRIORITY;
+    }
+    if (new_priority > LOWEST_PRIORITY) {
+       new_priority = LOWEST_PRIORITY;
     }
     if (new_priority == proc->priority) {
        // Same priority, do nothing
