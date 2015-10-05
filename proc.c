@@ -10,8 +10,13 @@
 
 struct {
   struct spinlock lock;
-  struct proc proc[NPRIORITIES][NPROC];
+  struct proc proc[NPROC];
 } ptable;
+
+// Priority table of proc pointers to ptable elements 
+struct proc *prior_table[NPRIORITIES][NPROC];
+// Initialize counts of each priority to 0
+int priority_counter[NPRIORITIES] = {0};
 
 struct channel * head_chan = 0;
 
@@ -39,12 +44,9 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-  int i;
 
   acquire(&ptable.lock);
-  // All procs initially start with priority 0 
-  for (i = 0;i<NPRIORITIES;i++) {
-    for(p = ptable.proc[i]; p < &ptable.proc[i][NPROC]; p++)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
         if(p->state == UNUSED)
             goto found;
   }
@@ -77,6 +79,12 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // Set priority to 0 in new process and update priority arrays
+  p->priority = 0;
+  int temp_count = priority_counter[p->priority];
+  prior_table[NPRIORITIES/2][temp_count] = p;
+  priority_counter[p->priority]++;
+ 
   return p;
 }
 
@@ -106,7 +114,10 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  // Update priority table for initproc
   p->priority = 0;
+  prior_table[NPRIORITIES/2][0] = p;
+  priority_counter[NPRIORITIES/2] = 1;
   p->state = RUNNABLE;
 }
 
@@ -153,6 +164,7 @@ fork(void)
   np->sz = proc->sz;
   np->parent = proc;
   *np->tf = *proc->tf;
+
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -205,16 +217,14 @@ exit(void)
   wakeup1(proc->parent);
 
   // Pass abandoned children to init.
-  int i;
-  for (i = 0;i<NPRIORITIES;i++) {
-      for(p = ptable.proc[i]; p < &ptable.proc[i][NPROC]; p++){
-        if(p->parent == proc){
-          p->parent = initproc;
-          if(p->state == ZOMBIE)
-            wakeup1(initproc);
-        }
-      }
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == proc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
   }
+
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
   sched();
@@ -233,27 +243,24 @@ wait(void)
   for(;;){
     // Scan through table looking for zombie children.
     havekids = 0;
-    int i;
-    for (i = 0;i<NPRIORITIES;i++) {
-        for(p = ptable.proc[i]; p < &ptable.proc[i][NPROC]; p++){
-          if(p->parent != proc)
-            continue;
-          havekids = 1;
-          if(p->state == ZOMBIE){
-            // Found one.
-            pid = p->pid;
-            kfree(p->kstack);
-            p->kstack = 0;
-            freevm(p->pgdir);
-            p->state = UNUSED;
-            p->pid = 0;
-            p->parent = 0;
-            p->name[0] = 0;
-            p->killed = 0;
-            release(&ptable.lock);
-            return pid;
-          }
-        }
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != proc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->state = UNUSED;
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        release(&ptable.lock);
+        return pid;
+      }
     }
     // No point waiting if we don't have any children.
     if(!havekids || proc->killed){
@@ -286,25 +293,22 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    int i;
-    for (i = 0; i < NPRIORITIES; i++) {
-        for(p = ptable.proc[i]; p < &ptable.proc[i][NPROC]; p++){
-          if(p->state != RUNNABLE)
-            continue;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
 
-          // Switch to chosen process.  It is the process's job
-          // to release ptable.lock and then reacquire it
-          // before jumping back to us.
-          proc = p;
-          switchuvm(p);
-          p->state = RUNNING;
-          swtch(&cpu->scheduler, proc->context);
-          switchkvm();
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+      swtch(&cpu->scheduler, proc->context);
+      switchkvm();
 
-          // Process is done running for now.
-          // It should have changed its p->state before coming back.
-          proc = 0;
-        }
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      proc = 0;
     }
     release(&ptable.lock);
 
@@ -496,18 +500,15 @@ kill(int pid)
 
   acquire(&ptable.lock);
   // First find channel
-  int i;
-  for (i = 0; i < NPRIORITIES; i++) {
-      for(p = ptable.proc[i]; p < &ptable.proc[i][NPROC]; p++){
-        if(p->pid == pid){
-          p->killed = 1;
-          // Wake process from sleep if necessary.
-          if(p->state == SLEEPING)
-            p->state = RUNNABLE;
-          ret = 0;
-          break;
-        }
-      }
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      p->killed = 1;
+      // Wake process from sleep if necessary.
+      if(p->state == SLEEPING)
+        p->state = RUNNABLE;
+      ret = 0;
+      break;
+    }
   }
   if (ret == -1)
     return -1;
@@ -553,27 +554,25 @@ procdump(void)
   [RUNNING]   "run   ",
   [ZOMBIE]    "zombie"
   };
-  int i,j;
+  int i;
   struct proc *p;
   char *state;
   uint pc[10];
   
-  for (j = 0; j < NPRIORITIES; j++) {
-      for(p = ptable.proc[j]; p < &ptable.proc[j][NPROC]; p++){
-        if(p->state == UNUSED)
-          continue;
-        if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
-          state = states[p->state];
-        else
-          state = "???";
-        cprintf("%d %s %s", p->pid, state, p->name);
-        if(p->state == SLEEPING){
-          getcallerpcs((uint*)p->context->ebp+2, pc);
-          for(i=0; i<10 && pc[i] != 0; i++)
-            cprintf(" %p", pc[i]);
-        }
-        cprintf("\n");
-      }
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state == UNUSED)
+      continue;
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+      state = states[p->state];
+    else
+      state = "???";
+    cprintf("%d %s %s", p->pid, state, p->name);
+    if(p->state == SLEEPING){
+      getcallerpcs((uint*)p->context->ebp+2, pc);
+      for(i=0; i<10 && pc[i] != 0; i++)
+        cprintf(" %p", pc[i]);
+    }
+    cprintf("\n");
   }
 }
 
@@ -582,46 +581,52 @@ procdump(void)
 int change_priority(int increment)
 {
     struct proc *p;
-    
+  
+    acquire(&ptable.lock);
+ 
     // Calculate actual increment value
     int new_priority = proc->priority;
-    int sum = new_priority+increment;
-    if (sum < LOWEST_PRIORITY) {
+    new_priority = new_priority + increment;
+    if (new_priority < LOWEST_PRIORITY) {
        new_priority = LOWEST_PRIORITY;
     }
-    if (sum > HIGHEST_PRIORITY) {
+    if (new_priority > HIGHEST_PRIORITY) {
        new_priority = HIGHEST_PRIORITY;
     }
     if (new_priority == proc->priority) {
-       return 0;
+       // Same priority, do nothing
+        release(&ptable.lock);
+        return 0;
     }
     // Increment this proc by moving it to the proper priority slot in the ptable
     //for(p = ptable.proc[priority]; p < &ptable.proc[priority][NPROC]; p++){
     int i;
     int found = 0;
-    acquire(&ptable.lock);
     for (i=0;i<NPROC;i++) {
-        p = &ptable.proc[proc->priority][i];
+        p = prior_table[proc->priority][i];
         if (found) {
             // Shift subsequent processes one index lower in the priority
-            ptable.proc[proc->priority][i-1] = ptable.proc[proc->priority][i];
+            prior_table[proc->priority][i-1] = prior_table[proc->priority][i];
             if (i == NPROC-1) 
-                ptable.proc[proc->priority][i].state = UNUSED;
-        } else if (p == proc) {
+                prior_table[proc->priority][i]->state = UNUSED;
+        } else if (p->pid == proc->pid) {
             found = 1;
         }
     }
     if (!found) {
-        return -1;
+        release(&ptable.lock);
+        return -2;
     }
     // Place p in new priority row
     for (i=0;i<NPROC;i++) {
-        if (ptable.proc[new_priority][i].state == UNUSED) {
-            ptable.proc[new_priority][i] = *p;
-            ptable.proc[new_priority][i].priority = new_priority;
+        if (prior_table[new_priority][i]->state == UNUSED) {
+            prior_table[new_priority][i] = p;
+            prior_table[new_priority][i]->priority = new_priority;
             release(&ptable.lock);
             return 0;
         }
     }
+
+    release(&ptable.lock);
     return -1;
 }

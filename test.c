@@ -7,6 +7,8 @@ int main(int argc, char * argv[])
   // Test sleeptable
   int pid;
   int parent = getpid();
+
+  printf(1, "Nice returned %d\n", nice(1));
   pid = fork();
   if (pid == 0) {
     // Child Process

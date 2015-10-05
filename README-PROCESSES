@@ -46,6 +46,6 @@ sysproc.c
 defined some useful priority macros in:
 param.h
 
-NPRIORITIES set to 5 in params.h (-2 to 2)
+NPRIORITIES set to 5 in params.h (-2 to 2). We will always assume this value to be odd to include priority 0
 
 
