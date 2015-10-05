@@ -18,16 +18,6 @@ Maintain a cache of pointers of indeces of processes that have called sleep in o
 
 2) Minimize number of machine instructions for which the process table lock must be held in wakeup()
 
-Part 3 Additions:
-"nice" syscall references added to:
-defs.h
-user.h
-usys.S
-syscall.h
-syscall.c
-sysproc.c
-
-
 Part 2:
   At first we wanted to maintain one array with linked lists of processes for specific channels, but we soon realized that knowing where empty cells are in the array is difficult to keep track of when we want to allocate a space in the array for another one of our proc containing structs. Instead we decided to change our plan to having a linked list of structs containing an array of sleeping processes sleeptable, a specific channel, a variable to keep track on number of processes within the array, and a pointer to the next channel.
   When calling sleep(), we want to look through our linked list of channels to see if there is a channel struct that we can put our current process in. We handle the edge case where our head is null. If we cannot find the appropriate channel, we create one at the head of our linked list for efficiency.
@@ -39,3 +29,16 @@ We assume:
 - Number of channels is bound to number of processes that can be SLEEPING
 
 Part 3:
+
+Part 3 Additions:
+"nice" syscall references added to:
+defs.h
+user.h
+usys.S
+syscall.h
+syscall.c
+sysproc.c
+
+NPRIORITIES set to 5 in params.h (-2 to 2)
+
+

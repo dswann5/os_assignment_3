@@ -95,5 +95,11 @@ sys_uptime(void)
 int 
 sys_nice(void)
 {
+    int increment;
+    if(argint(0, &increment) < 0)
+        return -1;
+ 
+    //int pid = proc->pid;
+ 
     return -1;
 }
