@@ -261,6 +261,21 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->priority = DEFAULT_PRIORITY;
+
+        // Remove process from priority_table
+        int i;
+        int prior = p->priority;
+        int found = 0;
+        for (i=0;i<priority_counter[prior];i++) {
+            if (found) {
+              priority_table[prior][i-1] = priority_table[prior][i];
+            } else if (priority_table[prior][i] == p) {
+              found = 1;
+            }
+        }
+        if (found)
+            priority_counter[prior]--;
+      
         release(&ptable.lock);
         return pid;
       }
@@ -538,7 +553,7 @@ kill(int pid)
     cur_chan=cur_chan->next_chan;
   }
 
-  // Find process in priority_table
+  // Remove process from priority_table
   int i;
   int prior = p->priority;
   int found = 0;
