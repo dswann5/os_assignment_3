@@ -28,6 +28,9 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+// Power function
+int pow(int, int);
+
 void
 pinit(void)
 {
@@ -304,17 +307,40 @@ scheduler(void)
 {
   struct proc *p;
 
+  int top_prior_ran = 1;
+  int num = top_prior_ran;
+  int curr_priority = HIGHEST_PRIORITY;
+/*
+  for (;;) {
+    printf(1, "Attempting to run priority: %d, top_prior_ran: %d\n", curr_priority, top_prior_ran);
+    if (num%2==0) {
+      num/=2;
+      curr_priority++;
+    } else {
+      curr_priority = HIGHEST_PRIORITY;
+      top_prior_ran++;
+      if (top_prior_ran > pow(2,NPRIORITIES-1)) {
+        top_prior_ran = 1;
+      }
+      num = top_prior_ran;
+    }
+  }
+*/
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
+    // Loop over process table looking for process to run with curr_priority as priority.
     acquire(&ptable.lock);
 
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+    int i;
+    int count = priority_counter[curr_priority];
+    if (count < 1) 
+      goto compute_next_priority;
+    for (i=0; i<count; i++) {
+      if(priority_table[curr_priority][i]->state != RUNNABLE)
         continue;
-
+      p = priority_table[curr_priority][i];
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -323,13 +349,26 @@ scheduler(void)
       p->state = RUNNING;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
-
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;
     }
-    release(&ptable.lock);
 
+compute_next_priority:
+    // Compute next priority   
+    if (num%2==0) {
+      num/=2;
+      curr_priority++;
+    } else {
+      curr_priority = HIGHEST_PRIORITY;
+      top_prior_ran++;
+      if (top_prior_ran > pow(2,NPRIORITIES-1)) {
+        top_prior_ran = 1;
+      }
+      num = top_prior_ran;
+    }
+    
+    release(&ptable.lock);
   }
 }
 
@@ -547,8 +586,10 @@ kill(int pid)
           found = 1;
         }
       }
-      if (found)
+      if (found) {
         cur_chan->num_sleeping--;
+        break;
+      }
     }
     cur_chan=cur_chan->next_chan;
   }
@@ -656,3 +697,46 @@ int change_priority(int increment)
     release(&ptable.lock);
     return 0;
 }
+/*
+// Remove entry in sleeptable
+int removeProcFromSleeptable(struct channel * head, int pid) {
+  struct channel * cur_chan = head;
+  // Find process in channel data structure, delete it
+  while (cur_chan != 0) 
+  {
+    if (cur_chan->chan == p->chan) 
+    {
+      int i;
+      int found = 0;
+      for (i=0;i<cur_chan->num_sleeping;i++) {
+        // Shift element to right of process one index to the left
+        if (found) {
+          cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
+        } else if (cur_chan->sleeptable[i]->pid == pid) {
+          // We found our process
+          found = 1;
+        }
+      }
+      if (found) {
+        cur_chan->num_sleeping--;
+        return 0;
+      }
+    }
+    cur_chan=cur_chan->next_chan;
+  }
+  return -1;
+}*/
+
+//Only takes positive (and zero) exponents
+int pow(int base, int exponent) {
+    int sum = base;
+    if (exponent == 0)
+	return 1;
+    int i;
+    for (i=1;i<exponent;i++) {
+	sum*=base;
+    }
+    return sum;
+}
+
+
