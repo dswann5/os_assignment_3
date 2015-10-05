@@ -89,3 +89,11 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// Attempts to adjust the priority of the calling process by the increment parameter
+// Returns 0 on success and -1 on failure 
+int 
+sys_nice(void)
+{
+    return -1;
+}
