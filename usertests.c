@@ -1713,7 +1713,7 @@ main(int argc, char *argv[])
     exit();
   }
   close(open("usertests.ran", O_CREATE));
-/*
+
   createdelete();
   linkunlink();
   concreate();
@@ -1723,8 +1723,8 @@ main(int argc, char *argv[])
   bigargtest();
   bigwrite();
   bigargtest();
-  bsstest();*/
-  sbrktest();/*
+  bsstest();
+  sbrktest();
   validatetest();
 
   opentest();
@@ -1752,6 +1752,6 @@ main(int argc, char *argv[])
   forktest();
   bigdir(); // slow
   exectest();
-*/
+
   exit();
 }

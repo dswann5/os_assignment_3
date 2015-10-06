@@ -24,6 +24,13 @@ struct channel * head_chan = 0;
 
 static struct proc *initproc;
 
+// remove proc from sleep table
+int removeProcFromSleepTable(struct channel *, struct proc *);
+// remove proc from priority table
+int removeProcFromPriorityTable(struct proc *);
+// switch priority of current process, proc
+int switchPriority(int);
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
@@ -268,7 +275,8 @@ wait(void)
         p->priority = DEFAULT_PRIORITY;
 
         // Remove process from priority_table
-        int i;
+        removeProcFromPriorityTable(p);
+/*        int i;
         int prior = p->priority;
         int found = 0;
         for (i=0;i<priority_counter[prior];i++) {
@@ -280,11 +288,12 @@ wait(void)
         }
         if (found)
             priority_counter[prior]--;
-      
+*/      
         release(&ptable.lock);
         return pid;
       }
     }
+
     // No point waiting if we don't have any children.
     if(!havekids || proc->killed){
       release(&ptable.lock);
@@ -333,7 +342,6 @@ scheduler(void)
         p = priority_table[curr_priority][index];
         if (p->state != RUNNABLE)
           continue;
-        cprintf("%d, %s\n", p->pid, p->name);
         priority_index[curr_priority] = index + 1;
         
         // Switch to chosen process.  It is the process's job
@@ -484,32 +492,9 @@ sleep(void *chan, struct spinlock *lk)
       head_chan = new_chan;
     }
   }
-
   sched();
-  struct channel * cur_chan = head_chan;
-  // Find process in channel data structure, delete it
-  while (cur_chan != 0) 
-  {
-    if (cur_chan->chan == proc->chan) 
-    {
-      int i;
-      int found = 0;
-      for (i=0;i<cur_chan->num_sleeping;i++) {
-        // Shift element to right of process one index to the left
-        if (found) {
-          cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
-        } else if (cur_chan->sleeptable[i]->pid == proc->pid) {
-          // We found our process
-          found = 1;
-        }
-      }
-      if (found) {
-        cur_chan->num_sleeping--;
-        break;
-      }
-    }
-    cur_chan=cur_chan->next_chan;
-  }
+  // Remove proc from sleep table
+  removeProcFromSleepTable(head_chan, proc);
 
   // Tidy up.
   proc->chan = 0;
@@ -573,7 +558,7 @@ kill(int pid)
 {
   struct proc *p;
   int ret = -1;
-  struct channel *cur_chan = head_chan;
+  //struct channel *cur_chan = head_chan;
 
   acquire(&ptable.lock);
   // First find channel
@@ -590,31 +575,11 @@ kill(int pid)
   if (ret == -1)
     return -1;
 
-  // Find process in channel data structure, delete it
-  while (cur_chan != 0) 
-  {
-    if (cur_chan->chan == p->chan) 
-    {
-      int i;
-      int found = 0;
-      for (i=0;i<cur_chan->num_sleeping;i++) {
-        // Shift element to right of process one index to the left
-        if (found) {
-          cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
-        } else if (cur_chan->sleeptable[i]->pid == pid) {
-          // We found our process
-          found = 1;
-        }
-      }
-      if (found) {
-        cur_chan->num_sleeping--;
-        break;
-      }
-    }
-    cur_chan=cur_chan->next_chan;
-  }
+  removeProcFromSleepTable(head_chan, p);
+   
   // Remove process from priority_table
-  int i;
+  //removeProcFromPriorityTable(p);
+/*  int i;
   int prior = p->priority;
   int found = 0;
   for (i=0;i<priority_counter[prior];i++) {
@@ -626,7 +591,7 @@ kill(int pid)
   }
   if (found)
     priority_counter[prior]--;
-
+*/
   release(&ptable.lock);
   return ret;
 }
@@ -672,8 +637,6 @@ procdump(void)
 // Checks to make sure increment is within bounds, otherwise defaults to max or min
 int change_priority(int increment)
 {
-    struct proc *p;
-  
     acquire(&ptable.lock);
     // Calculate actual increment value
     int new_priority = proc->priority;
@@ -690,9 +653,10 @@ int change_priority(int increment)
         return 0;
     }
     // Increment this proc by moving it to the proper priority slot in the ptable
-    int i;
+    switchPriority(new_priority);
+/*    int i;
     int found = 0;
-    struct proc * curr_proc;
+    struct proc *temp_proc, *p;
     for (i=0;i<priority_counter[proc->priority];i++) {
         p = priority_table[proc->priority][i];
         if (found) {
@@ -700,7 +664,7 @@ int change_priority(int increment)
             priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
         } else if (p == proc) {
             found = 1;
-            curr_proc = p;
+            temp_proc = p;
         }
     }
     if (!found) {
@@ -710,15 +674,15 @@ int change_priority(int increment)
     priority_counter[proc->priority]--;
     // Place p in new priority row
     int temp_count = priority_counter[new_priority];
-    priority_table[new_priority][temp_count] = curr_proc;
+    priority_table[new_priority][temp_count] = temp_proc;
     priority_table[new_priority][temp_count]->priority = new_priority;
-    priority_counter[new_priority]++;
+    priority_counter[new_priority]++;*/
+
     release(&ptable.lock);
     return 0;
 }
-/*
 // Remove entry in sleeptable
-int removeProcFromSleeptable(struct channel * head, int pid) {
+int removeProcFromSleepTable(struct channel * head, struct proc * p) {
   struct channel * cur_chan = head;
   // Find process in channel data structure, delete it
   while (cur_chan != 0) 
@@ -731,7 +695,7 @@ int removeProcFromSleeptable(struct channel * head, int pid) {
         // Shift element to right of process one index to the left
         if (found) {
           cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
-        } else if (cur_chan->sleeptable[i]->pid == pid) {
+        } else if (cur_chan->sleeptable[i]->pid == p->pid) {
           // We found our process
           found = 1;
         }
@@ -744,7 +708,52 @@ int removeProcFromSleeptable(struct channel * head, int pid) {
     cur_chan=cur_chan->next_chan;
   }
   return -1;
-}*/
+}
+
+int removeProcFromPriorityTable(struct proc * p) {
+  int i;
+  int prior = p->priority;
+  int found = 0;
+  for (i=0;i<priority_counter[prior];i++) {
+    if (found) {
+      priority_table[prior][i-1] = priority_table[prior][i];
+    } else if (priority_table[prior][i] == p) {
+      found = 1;
+    }
+  }
+  if (found) {
+    priority_counter[prior]--;
+    return 0;
+  }
+  return -1;
+}
+
+int switchPriority(int new_priority) {
+    int i;
+    int found = 0;
+    struct proc *temp_proc, *p;
+    for (i=0;i<priority_counter[proc->priority];i++) {
+        p = priority_table[proc->priority][i];
+        if (found) {
+            // Shift subsequent processes one index lower in the priority
+            priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
+        } else if (p == proc) {
+            found = 1;
+            temp_proc = p;
+        }
+    }
+    if (!found) {
+        release(&ptable.lock);
+        return -1;
+    }
+    priority_counter[proc->priority]--;
+    // Place p in new priority row
+    int temp_count = priority_counter[new_priority];
+    priority_table[new_priority][temp_count] = temp_proc;
+    priority_table[new_priority][temp_count]->priority = new_priority;
+    priority_counter[new_priority]++;
+    return 0;
+}
 
 //Only takes positive (and zero) exponents
 int pow(int base, int exponent) {
