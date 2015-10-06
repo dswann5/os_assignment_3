@@ -310,22 +310,7 @@ scheduler(void)
   int top_prior_ran = 1;
   int num = top_prior_ran;
   int curr_priority = HIGHEST_PRIORITY;
-/*
-  for (;;) {
-    printf(1, "Attempting to run priority: %d, top_prior_ran: %d\n", curr_priority, top_prior_ran);
-    if (num%2==0) {
-      num/=2;
-      curr_priority++;
-    } else {
-      curr_priority = HIGHEST_PRIORITY;
-      top_prior_ran++;
-      if (top_prior_ran > pow(2,NPRIORITIES-1)) {
-        top_prior_ran = 1;
-      }
-      num = top_prior_ran;
-    }
-  }
-*/
+  
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -355,6 +340,7 @@ scheduler(void)
     }
 
 compute_next_priority:
+    release(&ptable.lock);
     // Compute next priority   
     if (num%2==0) {
       num/=2;
@@ -368,7 +354,6 @@ compute_next_priority:
       num = top_prior_ran;
     }
     
-    release(&ptable.lock);
   }
 }
 
@@ -490,10 +475,34 @@ sleep(void *chan, struct spinlock *lk)
   }
 
   sched();
+  struct channel * cur_chan = head_chan;
+  // Find process in channel data structure, delete it
+  while (cur_chan != 0) 
+  {
+    if (cur_chan->chan == proc->chan) 
+    {
+      int i;
+      int found = 0;
+      for (i=0;i<cur_chan->num_sleeping;i++) {
+        // Shift element to right of process one index to the left
+        if (found) {
+          cur_chan->sleeptable[i-1] = cur_chan->sleeptable[i];
+        } else if (cur_chan->sleeptable[i]->pid == proc->pid) {
+          // We found our process
+          found = 1;
+        }
+      }
+      if (found) {
+        cur_chan->num_sleeping--;
+        break;
+      }
+    }
+    cur_chan=cur_chan->next_chan;
+  }
 
   // Tidy up.
   proc->chan = 0;
-
+  
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
     release(&ptable.lock);
@@ -593,7 +602,6 @@ kill(int pid)
     }
     cur_chan=cur_chan->next_chan;
   }
-
   // Remove process from priority_table
   int i;
   int prior = p->priority;
