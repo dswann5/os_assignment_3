@@ -15,9 +15,11 @@ struct {
 
 // Priority table of proc pointers to ptable elements 
 struct proc *priority_table[NPRIORITIES][NPROC];
-// Initialize counts of each priority to 0
+// Initialize number of processes of each priority to 0
 int priority_counter[NPRIORITIES] = {0};
-
+// Initialize the index to keep track of circular priority queues
+int priority_index[NPRIORITIES] = {0};
+// Beginning of the channel list
 struct channel * head_chan = 0;
 
 static struct proc *initproc;
@@ -319,13 +321,45 @@ scheduler(void)
     acquire(&ptable.lock);
 
     int i;
-    int count = priority_counter[curr_priority];
-    if (count < 1) 
+    int num_procs = priority_counter[curr_priority];
+    //int starting_index = priorty_index[curr_priority];
+    if (num_procs < 1) 
       goto compute_next_priority;
-    for (i=0; i<count; i++) {
+
+    while (priority_index[curr_priority] < num_procs)
+    {
+        i = priority_index[curr_priority];
+
+        // Do proc switching here  
+        if(priority_table[curr_priority][i]->state != RUNNABLE) {
+            priority_index[curr_priority]++;
+            continue;
+        }
+
+        p = priority_table[curr_priority][i];
+
+        // Update current index of circular priority queue
+        priority_index[curr_priority]++;
+
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        swtch(&cpu->scheduler, proc->context);
+        switchkvm();
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+    }
+    priority_index[curr_priority] = 0;
+
+    /*for (i=0; i<num_procs; i++) {
       if(priority_table[curr_priority][i]->state != RUNNABLE)
         continue;
       p = priority_table[curr_priority][i];
+      priority_index[curr_priority]++;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -337,7 +371,7 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;
-    }
+    }*/
 
 compute_next_priority:
     release(&ptable.lock);
@@ -746,5 +780,3 @@ int pow(int base, int exponent) {
     }
     return sum;
 }
-
-

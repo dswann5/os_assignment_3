@@ -54,4 +54,5 @@ param.h
 
 NPRIORITIES set to 5 in params.h (-2 to 2). We will always assume this value to be odd to include priority 0
 
+We initially defined our priority scheduler logic to run the first process in each priority table, which we realized was not ideal as this was not fair to the rest of the processes within that priority. Some processes towards the end of the priority array had the potential to be infinitely stuck if a process towards the front of the array was consistently mutating states (ex. from SLEEPING to RUNNABLE and back again). This was fixed by implementing a circular queueing system, where each process in a priority has a similar chance of being run. 
 
