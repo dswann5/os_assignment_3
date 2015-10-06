@@ -3,7 +3,6 @@ dswann5@jhu.edu and liu.jerald@gmail.com
 Assignment 3
 
 
-
 -----Part 1: Study, Design, Log-----
 
 The process that wants to give up its CPU must acquire the ptable.lock, release any other locks it has, update its proc state and call sched(). Sched() checks for the previously mentioned conditions. Since the ptable lock is held, the CPU should be running w/interrups disabled. Sched() calls swtch() to save the current context in proc->context. Then we switch to the scheduler context given by cpu->scheduler. Swtch() returns on scheduler's stack as though scheduler's swtch had returned. The scheduler is infinitely looping to find a process to run and to switch to it. It finds a process that is RUNNABLE, sets proc, switches to the process' page table with switchuvm, marks the process as RUNNING, and finally calls swtch() to start running the new process.
@@ -13,9 +12,7 @@ Sleep() and wakeup() are used to prevent processes from having to continuously c
 Sleep() begins with sanity checks: there must be a current process, and sleep() must have been passed a lock. Sleep acquires the ptable.lock. The process going to sleep holds both the ptable.lock and lk. This is necessary in the caller to ensure no other process could start a call to wakeup(). Now that sleep holds the ptable.lock, it's safe to release lk. Some other process may start a call to wakeup(), but will not run until it can acquire the ptable.lock, so it must wait until sleep() has finished putting process to sleep(), keeping wakeup() from missing sleep(). If the lk is the same as the ptable.lock, then there would be a deadlock. Sleep() considers the acquire and release to cancel each other out, so it sleeps(). Now that the ptable.lock is held (and only the ptable.lock is held) sleep() can record the sleep channel, change proc state to SLEEPING, and call sched. Eventually a process calls wakeup(). Wakeup() acquires the ptable lock and calls wakeup1(). Since we are manipulating process state, we have to make sure that sleep() and wakeup() do not miss each other. When looping through processes, wakeup1() switches processes on the same channel that are SLEEPING to RUNNABLE. The scheduler will see that the process is ready to be run. Wakeup must be called holding a lock that prevents observation of whatever the wakeup condition is. Sleeping processes won't miss a wakeup as a result. At all times before a process checks the condition until after it sleeps, it holds either a lock on the condition or ptable.lock or both. Since wakeup() executes holding both locks, wakeup must execute either before the potential sleeper checks the condition, or after the potential sleeper has completed putting itself to sleep.
 
 Part 2 Additions:
-1) Minimize number of processes to examine
 Maintain a cache of pointers of indeces of processes that have called sleep in order to excluisively check those processes upon calling wakeup(). We do this by maintaining one NPROC length array in proc.c that keeps track of sleeping processes. We will create a struct containing a pointer to a process, the channel the sleeping process is sleeping on, and a next pointer to another process. To keep track of individual channels, we plan on having the first instance of a process sleeping on a specific channel to act as a head of a linked list of other processes sleeping on the same channel. The next pointers would be set to the next available space in the array. 
-2) Minimize number of machine instructions for which the process table lock must be held in wakeup()
 
 Part 3 Additions:
 We want to replace the original ptable with a two dimensional ptable that contains the processes with respect to a certain priority. So, we plan to make a 2d array where the rows correspond to the priorities (0 index being the highest, corresponding with priority -2, and 4 index being the lowest, corresponding to priority 2). Most modifications will happen in proc.c where the ptable is defined. 
@@ -32,12 +29,13 @@ Assumptions:
 - We assume we have sufficient memory for our linked list of channels, since we know that only up to 64 channels can exist at one time.
 
   At first we wanted to maintain one array with linked lists of processes for specific channels, but we soon realized that knowing where empty cells are in the array is difficult to keep track of when we want to allocate a space in the array for another one of our proc containing structs. Instead we decided to change our plan to having a linked list of structs containing an array of sleeping processes sleeptable, a specific channel, a variable to keep track on number of processes within the array, and a pointer to the next channel.
-  When calling sleep(), we want to look through our linked list of channels to see if there is a channel struct that we can put our current process in. We handle the edge case where our head is null. If we cannot find the appropriate channel, we create one at the head of our linked list for efficiency.
+  When calling sleep(), we want to look through our linked list of channels to see if there is a channel struct that we define in channel.h that we can put our current process in. We handle the edge case where our head is null. If we cannot find the appropriate channel, we create one at the head of our linked list for efficiency.
   In wakeup(), we look for the channel we're interested in, we set all the processes in its sleeptable to RUNNABLE, then we unlink the channel from the linked list since we're no longer interested in this channel. We make sure to kfree() the channel since we kalloc()'d to it.
   We are concerned since our worst case complexity is O(n^2). This is due to our assumption that number of channels is bounded by number of processes sleeping. So, in wakeup(), we search through n channels for the channel we want to wakeup processes on, then we go through the n processes in that channel's sleeptable to set them all to running. This is worse than the O(n) worst case for xv6's original implementation. We argue though that on the average case, our implementation will be faster since we avoid having to check the entire ptable for SLEEPING processes on a certain channel.
   Since processes can be killed without completing their execution, we must modify our data structure upon a process being killed. Within kill(), we can make use of the pid in order to look up the process's channel. We iterate over our linked list of channels to find the appropriate channel, find the process within the array, and shift all processes located at greater indices one to the left.
 
 Argument for where we acquire and release ptable locks:
+  We argue that our code in wakeup1() has the least amount of instructions based on the requirements of our sleeping channel data structure, comprised of a linked list. It is essentially a dictionary of channels with O(n) access for the dictionary, with an additional O(n) access for the processes sleeping on the specific channel. In the worst case we have O(n^2) performance. However, we optimize this by searching only up to the number of processes actually corresponding to that channel. Also, we make sure the array belonging to each channel has all the processes stored in the lowest indices possible. In addition, we speculate that not all 64 processes will be running at the same time, and all the processes will most likely not be sleeping on the same channel. Because of all the aformentioned assumptions, we speculate that the actual/average runtime performance will be much less than O(n^2).
 
 -----Part 3: Setting Priorities-----
   In order to keep track of priority, our main data structure involves modifying the ptable. We modify it so that it is 2-dimensional, NPRIORITIES by 64 matrix. NPRIORITIES, set in param.h, is the max number of priorities considered. We set it to 5. 64 is the max number of processes that can be run, potentially all in the same priority. We also add the priority to the the proc struct in order to enable efficient lookup of where the process is in our new 2d process table. We were thinking of adding the exact location in the 2d matrix of where the proc is located to be more efficient; however, we decided against this since it doesn't make sense that a process should know that. It should know what priority it is though. Whenever we want to call nice() to change the priority of the current process, we use the priority of the proc in order to find the row of the process matrix to search through. When we find the process, we evict it, shift array elements in order to prevent any "gaps", and then add that process to the row corresponding to its new priority. We update the priority member of proc as well.
@@ -49,8 +47,10 @@ Difficulties:
 - NPRIORITIES/2. Solution: Set macros for lower bound, upper bound and default priority.
 - Tried to put our priority changes between acquire and release within fork, but for some reason caused unexpected behavior.
 - Instead of modifying ptable, we just maintain the aforementioned 5 by 64 matrix, but instead contains pointers to the processes. This made things a lot faster.
+- We initially defined our priority scheduler logic to run the first process in each priority table, which we realized was not ideal as this was not fair to the rest of the processes within that priority. Some processes towards the end of the priority array had the potential to be infinitely stuck if a process towards the front of the array was consistently mutating states (ex. from SLEEPING to RUNNABLE and back again). This was fixed by implementing a circular queueing system, where each process in a priority has a similar chance of being run. 
 
-Part 3 Additions:
+Files changed:
+
 "nice" syscall references added to:
 defs.h
 user.h
@@ -59,10 +59,12 @@ syscall.h
 syscall.c
 sysproc.c
 
+scheduler modified in:
+proc.c
+
 defined some useful priority macros in:
 param.h
 
-NPRIORITIES set to 5 in params.h (-2 to 2). We will always assume this value to be odd to include priority 0
 
-We initially defined our priority scheduler logic to run the first process in each priority table, which we realized was not ideal as this was not fair to the rest of the processes within that priority. Some processes towards the end of the priority array had the potential to be infinitely stuck if a process towards the front of the array was consistently mutating states (ex. from SLEEPING to RUNNABLE and back again). This was fixed by implementing a circular queueing system, where each process in a priority has a similar chance of being run. 
-
+-----NOTES-----
+Sometimes, but not all the time, we encounter a print out "zombie!" when we run our cutsom test.c. We are not sure why, but we did notice that this also happened occasionally with regular uprogs in other builds of xv6 from previous assignments.
