@@ -326,52 +326,34 @@ scheduler(void)
     if (num_procs < 1) 
       goto compute_next_priority;
 
-    while (priority_index[curr_priority] < num_procs)
-    {
-        i = priority_index[curr_priority];
+    // Roll over this priority's current index
+    if (priority_index[curr_priority] >= num_procs)
+        priority_index[curr_priority] = 0;
+    
+    i = priority_index[curr_priority];
+    p = priority_table[curr_priority][i];
 
-        // Do proc switching here  
-        if(priority_table[curr_priority][i]->state != RUNNABLE) {
-            priority_index[curr_priority]++;
-            continue;
-        }
-
-        p = priority_table[curr_priority][i];
-
-        // Update current index of circular priority queue
+    // Do proc switching here  
+    if (p->state != RUNNABLE) {
         priority_index[curr_priority]++;
-
-        // Switch to chosen process.  It is the process's job
-        // to release ptable.lock and then reacquire it
-        // before jumping back to us.
-        proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-        swtch(&cpu->scheduler, proc->context);
-        switchkvm();
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        proc = 0;
-    }
-    priority_index[curr_priority] = 0;
-
-    /*for (i=0; i<num_procs; i++) {
-      if(priority_table[curr_priority][i]->state != RUNNABLE)
+        release(&ptable.lock);
         continue;
-      p = priority_table[curr_priority][i];
-      priority_index[curr_priority]++;
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, proc->context);
-      switchkvm();
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
-    }*/
+    }
+
+    // Update current index of circular priority queue
+    priority_index[curr_priority]++;
+
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&cpu->scheduler, proc->context);
+    switchkvm();
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
 
 compute_next_priority:
     release(&ptable.lock);
@@ -390,7 +372,6 @@ compute_next_priority:
     
   }
 }
-
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state.
 void
