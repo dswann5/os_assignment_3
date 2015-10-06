@@ -276,19 +276,7 @@ wait(void)
 
         // Remove process from priority_table
         removeProcFromPriorityTable(p);
-/*        int i;
-        int prior = p->priority;
-        int found = 0;
-        for (i=0;i<priority_counter[prior];i++) {
-            if (found) {
-              priority_table[prior][i-1] = priority_table[prior][i];
-            } else if (priority_table[prior][i] == p) {
-              found = 1;
-            }
-        }
-        if (found)
-            priority_counter[prior]--;
-*/      
+        
         release(&ptable.lock);
         return pid;
       }
@@ -579,19 +567,7 @@ kill(int pid)
    
   // Remove process from priority_table
   //removeProcFromPriorityTable(p);
-/*  int i;
-  int prior = p->priority;
-  int found = 0;
-  for (i=0;i<priority_counter[prior];i++) {
-    if (found) {
-      priority_table[prior][i-1] = priority_table[prior][i];
-    } else if (priority_table[prior][i] == p) {
-      found = 1;
-    }
-  }
-  if (found)
-    priority_counter[prior]--;
-*/
+
   release(&ptable.lock);
   return ret;
 }
@@ -653,34 +629,13 @@ int change_priority(int increment)
         return 0;
     }
     // Increment this proc by moving it to the proper priority slot in the ptable
-    switchPriority(new_priority);
-/*    int i;
-    int found = 0;
-    struct proc *temp_proc, *p;
-    for (i=0;i<priority_counter[proc->priority];i++) {
-        p = priority_table[proc->priority][i];
-        if (found) {
-            // Shift subsequent processes one index lower in the priority
-            priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
-        } else if (p == proc) {
-            found = 1;
-            temp_proc = p;
-        }
-    }
-    if (!found) {
-        release(&ptable.lock);
-        return -1;
-    }
-    priority_counter[proc->priority]--;
-    // Place p in new priority row
-    int temp_count = priority_counter[new_priority];
-    priority_table[new_priority][temp_count] = temp_proc;
-    priority_table[new_priority][temp_count]->priority = new_priority;
-    priority_counter[new_priority]++;*/
+    // store return value in temp ret because we still need to release the ptable lock
+    int ret = switchPriority(new_priority);
 
     release(&ptable.lock);
-    return 0;
+    return ret;
 }
+
 // Remove entry in sleeptable
 int removeProcFromSleepTable(struct channel * head, struct proc * p) {
   struct channel * cur_chan = head;
@@ -729,30 +684,29 @@ int removeProcFromPriorityTable(struct proc * p) {
 }
 
 int switchPriority(int new_priority) {
-    int i;
-    int found = 0;
-    struct proc *temp_proc, *p;
-    for (i=0;i<priority_counter[proc->priority];i++) {
-        p = priority_table[proc->priority][i];
-        if (found) {
-            // Shift subsequent processes one index lower in the priority
-            priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
-        } else if (p == proc) {
-            found = 1;
-            temp_proc = p;
-        }
+  int i;
+  int found = 0;
+  struct proc *temp_proc, *p;
+  for (i=0;i<priority_counter[proc->priority];i++) {
+    p = priority_table[proc->priority][i];
+    if (found) {
+      // Shift subsequent processes one index lower in the priority
+      priority_table[proc->priority][i-1] = priority_table[proc->priority][i];
+    } else if (p == proc) {
+      found = 1;
+      temp_proc = p;
     }
-    if (!found) {
-        release(&ptable.lock);
-        return -1;
-    }
-    priority_counter[proc->priority]--;
-    // Place p in new priority row
-    int temp_count = priority_counter[new_priority];
-    priority_table[new_priority][temp_count] = temp_proc;
-    priority_table[new_priority][temp_count]->priority = new_priority;
-    priority_counter[new_priority]++;
-    return 0;
+  }
+  if (!found) {
+    return -1;
+  }
+  priority_counter[proc->priority]--;
+  // Place p in new priority row
+  int temp_count = priority_counter[new_priority];
+  priority_table[new_priority][temp_count] = temp_proc;
+  priority_table[new_priority][temp_count]->priority = new_priority;
+  priority_counter[new_priority]++;
+  return 0;
 }
 
 //Only takes positive (and zero) exponents
