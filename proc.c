@@ -307,55 +307,51 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
-
   int top_prior_ran = 1;
   int num = top_prior_ran;
   int curr_priority = HIGHEST_PRIORITY;
-  
+  struct proc *p;
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
-
-    // Loop over process table looking for process to run with curr_priority as priority.
+    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    int i;
     int num_procs = priority_counter[curr_priority];
-    //int starting_index = priorty_index[curr_priority];
-    if (num_procs < 1) 
-      goto compute_next_priority;
 
-    // Roll over this priority's current index
-    if (priority_index[curr_priority] >= num_procs)
+    if (num_procs >= 1) {
+      // Look through priority table
+      // If our index is out of range (i.e., >= num_procs in our priority row), reset to 0
+      if (priority_index[curr_priority] >= num_procs)
         priority_index[curr_priority] = 0;
-    
-    i = priority_index[curr_priority];
-    p = priority_table[curr_priority][i];
 
-    // Do proc switching here  
-    if (p->state != RUNNABLE) {
-        priority_index[curr_priority]++;
-        release(&ptable.lock);
-        continue;
+      int i, index;
+      // Loop through all elements of array starting at index
+      for (i=0; i<num_procs; i++) {
+        index = (priority_index[curr_priority] + i) % num_procs;
+        p = priority_table[curr_priority][index];
+        if (p->state != RUNNABLE)
+          continue;
+        cprintf("%d, %s\n", p->pid, p->name);
+        priority_index[curr_priority] = index + 1;
+        
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        swtch(&cpu->scheduler, proc->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+        // break to avoid running more RUNNABLE processes
+        break; 
+      }       
     }
-
-    // Update current index of circular priority queue
-    priority_index[curr_priority]++;
-
-    // Switch to chosen process.  It is the process's job
-    // to release ptable.lock and then reacquire it
-    // before jumping back to us.
-    proc = p;
-    switchuvm(p);
-    p->state = RUNNING;
-    swtch(&cpu->scheduler, proc->context);
-    switchkvm();
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    proc = 0;
-
-compute_next_priority:
     release(&ptable.lock);
     // Compute next priority   
     if (num%2==0) {
@@ -369,9 +365,9 @@ compute_next_priority:
       }
       num = top_prior_ran;
     }
-    
   }
 }
+
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state.
 void

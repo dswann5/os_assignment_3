@@ -2,6 +2,17 @@
 #include "stat.h"
 #include "user.h"
 #include "param.h"
+//Only takes positive (and zero) exponents
+int pow(int base, int exponent) {
+    int sum = base;
+    if (exponent == 0)
+	return 1;
+    int i;
+    for (i=1;i<exponent;i++) {
+	sum*=base;
+    }
+    return sum;
+}
 
 int main(int argc, char * argv[]) 
 {
@@ -9,7 +20,7 @@ int main(int argc, char * argv[])
   int pid;
   int parent = getpid();
 
-//  printf(1, "Nice %d returned %d\n", 1, nice(1));
+  //printf(1, "Nice %d returned %d\n", 1, nice(1));
   pid = fork();
   //printf(1, "Nice %d returned %d\n", 3, nice(3));
   //printf(1, "Nice %d returned %d\n", -1, nice(-1));
@@ -27,8 +38,6 @@ int main(int argc, char * argv[])
         // Error, failed to fork()
       }
 
-//  int i;
-//  for (i = 0; i<1000;i++) {
-//  }
+    
   exit(); 
 }
