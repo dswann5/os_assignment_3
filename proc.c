@@ -562,9 +562,10 @@ kill(int pid)
       break;
     }
   }
-  if (ret == -1)
+  if (ret == -1) {
+    release(&ptable.lock);
     return -1;
-
+  }
   // Remove process from sleep table 
   removeProcFromSleepTable(head_chan, p);
   
