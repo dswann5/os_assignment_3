@@ -1,3 +1,7 @@
+// Daniel Swann and Jerald Liu
+// Operating Systems Fall 2015
+// Assignment 3: Sleeping and Priority modifications
+
 #include "types.h"
 #include "defs.h"
 #include "param.h"
@@ -24,16 +28,14 @@ struct channel * head_chan = 0;
 
 static struct proc *initproc;
 
-// remove proc from sleep table
-int removeProcFromSleepTable(struct channel *, struct proc *);
-// remove proc from priority table
-int removeProcFromPriorityTable(struct proc *);
-// switch priority of current process, proc
-int switchPriority(int);
-
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
+
+// forward declarations of custom functions
+int removeProcFromSleepTable(struct channel *, struct proc *);
+int removeProcFromPriorityTable(struct proc *);
+int switchPriority(int);
 
 static void wakeup1(void *chan);
 
@@ -120,7 +122,7 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  // Update priority table for initproc
+  // Set priority and update priority table for initproc
   p->priority = DEFAULT_PRIORITY;
   int next_position = priority_counter[DEFAULT_PRIORITY];
   priority_table[DEFAULT_PRIORITY][next_position] = p;
@@ -185,16 +187,14 @@ fork(void)
  
   pid = np->pid;
 
-  // Set priority to 0 in new process and update priority arrays
+  // Set priority to 0 in new process and update priority table
   np->priority = DEFAULT_PRIORITY;
   int temp_count = priority_counter[DEFAULT_PRIORITY];
   priority_table[DEFAULT_PRIORITY][temp_count] = np;
   priority_counter[DEFAULT_PRIORITY]++; 
-
  
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
-
   np->state = RUNNABLE;
   release(&ptable.lock);
   
@@ -274,9 +274,11 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         
-        // Remove process from priority_table
-        removeProcFromPriorityTable(p);
-
+        // Remove zombie process from priority_table
+        if (removeProcFromPriorityTable(p) < 0)
+            panic("priority table fail");
+        
+        // Set default priority for this process, just in case
         p->priority = DEFAULT_PRIORITY;
 
         release(&ptable.lock);
@@ -317,6 +319,7 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
+    // Find size of this priority array
     int num_procs = priority_counter[curr_priority];
 
     if (num_procs >= 1) {
@@ -340,9 +343,9 @@ scheduler(void)
         proc = p;
         switchuvm(p);
         p->state = RUNNING;
+        
         swtch(&cpu->scheduler, proc->context);
         switchkvm();
-
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         proc = 0;
@@ -351,6 +354,7 @@ scheduler(void)
       }       
     }
     release(&ptable.lock);
+
     // Compute next priority   
     if (num%2==0) {
       num/=2;
@@ -444,19 +448,20 @@ sleep(void *chan, struct spinlock *lk)
   proc->state = SLEEPING;
 
   struct channel * new_chan;
-  // Check for existing channel. Add if not exists. 
-  // Add proc to appropriate channel.
+  // Check for existing channel, or adding it to the front of the chanel list 
+  // Also adds this proc to appropriate channel.
   if (head_chan == 0) {
     if ((new_chan = (struct channel *) kalloc()) == 0) {
         panic("failed kalloc to channel");
     }
 
+    // Add first channel to first in list
     new_chan->chan = chan;
     new_chan->num_sleeping = 0;
     new_chan->sleeptable[new_chan->num_sleeping++] = proc;
     new_chan->next_chan = 0;
     head_chan = new_chan;
-  } else {
+  } else { // Check for channel existence by iterating through list
     int exists = 0;
     struct channel * curr = head_chan;
     while (curr->next_chan != 0) {
@@ -483,7 +488,7 @@ sleep(void *chan, struct spinlock *lk)
     }
   }
   sched();
-  // Remove proc from sleep table
+  // Remove proc from sleep table if it's there
   removeProcFromSleepTable(head_chan, proc);
 
   // Tidy up.
@@ -505,7 +510,7 @@ wakeup1(void *chan)
   struct channel *cur_chan = head_chan;
   struct channel *prev_chan = 0;
 
-  // Find all procs in this channel by iterating through linkedlist
+  // Find all procs in this channel by iterating through channel list
   while (cur_chan != 0) 
   {
     if (cur_chan->chan == chan) 
@@ -566,7 +571,7 @@ kill(int pid)
     release(&ptable.lock);
     return -1;
   }
-  // Remove process from sleep table 
+  // Remove proc from sleep table if it's there
   removeProcFromSleepTable(head_chan, p);
   
   release(&ptable.lock);
@@ -637,7 +642,8 @@ int change_priority(int increment)
     return ret;
 }
 
-// Remove entry in sleeptable
+// Remove the given process from the sleeptable, if it exists
+// Returns -1 on failure, 0 on success
 int removeProcFromSleepTable(struct channel * head, struct proc * p) {
   struct channel * cur_chan = head;
   // Find process in channel data structure, delete it
@@ -666,6 +672,8 @@ int removeProcFromSleepTable(struct channel * head, struct proc * p) {
   return -1;
 }
 
+// Remove the given process from the priority table, if it exists
+// Returns -1 on failure, 0 on success
 int removeProcFromPriorityTable(struct proc * p) {
   int i;
   int prior = p->priority;
@@ -678,6 +686,7 @@ int removeProcFromPriorityTable(struct proc * p) {
     }
   }
   if (found) {
+    // Decrease size of this priority array
     priority_counter[prior]--;
     return 0;
   }
