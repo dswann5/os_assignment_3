@@ -191,9 +191,10 @@ fork(void)
   priority_table[DEFAULT_PRIORITY][temp_count] = np;
   priority_counter[DEFAULT_PRIORITY]++; 
 
+ 
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
-  
+
   np->state = RUNNABLE;
   release(&ptable.lock);
   
@@ -272,11 +273,12 @@ wait(void)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
-        p->priority = DEFAULT_PRIORITY;
-
+        
         // Remove process from priority_table
         removeProcFromPriorityTable(p);
-        
+
+        p->priority = DEFAULT_PRIORITY;
+
         release(&ptable.lock);
         return pid;
       }
@@ -554,7 +556,7 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING) 
         p->state = RUNNABLE;
       ret = 0;
       break;
@@ -563,11 +565,9 @@ kill(int pid)
   if (ret == -1)
     return -1;
 
+  // Remove process from sleep table 
   removeProcFromSleepTable(head_chan, p);
-   
-  // Remove process from priority_table
-  //removeProcFromPriorityTable(p);
-
+  
   release(&ptable.lock);
   return ret;
 }
@@ -683,10 +683,14 @@ int removeProcFromPriorityTable(struct proc * p) {
   return -1;
 }
 
+// Removes proc pointer from one priority queue and moves it to another 
+// Returns -1 on failure and 0 on success
 int switchPriority(int new_priority) {
   int i;
   int found = 0;
   struct proc *temp_proc, *p;
+  
+  // Search for this process in its proper priority queue
   for (i=0;i<priority_counter[proc->priority];i++) {
     p = priority_table[proc->priority][i];
     if (found) {
@@ -700,23 +704,26 @@ int switchPriority(int new_priority) {
   if (!found) {
     return -1;
   }
+  // Decrease number of procs in this priority queue
   priority_counter[proc->priority]--;
-  // Place p in new priority row
+
+  // Place p at the end of the new priority row
   int temp_count = priority_counter[new_priority];
   priority_table[new_priority][temp_count] = temp_proc;
-  priority_table[new_priority][temp_count]->priority = new_priority;
+  temp_proc->priority = new_priority;
   priority_counter[new_priority]++;
   return 0;
 }
 
-//Only takes positive (and zero) exponents
+// Returns an int, base^exponent for priority testing
+// Only takes positive (and zero) exponents
 int pow(int base, int exponent) {
     int sum = base;
     if (exponent == 0)
-	return 1;
+	    return 1;
     int i;
     for (i=1;i<exponent;i++) {
-	sum*=base;
+	    sum*=base;
     }
     return sum;
 }
